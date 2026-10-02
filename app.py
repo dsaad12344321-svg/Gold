@@ -140,7 +140,10 @@ def main():
         currency = st.selectbox("Currency", ["All"] + currencies)
         impact = st.selectbox("Impact", ["All"] + impacts)
         relevance = st.selectbox("Relevance", ["All"] + relevances)
-        selected_events = st.multiselect("Event", event_names, placeholder="All events")
+        selected_events = st.multiselect("Event", event_names, default=[], placeholder="All events")
+        if selected_events and st.button("✕ Clear Event Selection", use_container_width=True):
+            st.session_state["clear_events"] = True
+            st.rerun()
         reaction = st.selectbox("Reaction period", [1, 5, 15, 30, 60], index=2, format_func=lambda x: f"{x} minutes")
         date_range = st.date_input(
             "Date range",
@@ -153,8 +156,11 @@ def main():
         analyze_clicked = st.button("🔍 Analyze", type="primary", use_container_width=True)
         reset_clicked = st.button("↻ Reset", use_container_width=True)
 
+    if st.session_state.pop("clear_events", False):
+        st.info("تم إلغاء اختيار الحدث. اضغط Analyze لعرض جميع الأحداث المطابقة لباقي الفلاتر.")
+
     if reset_clicked:
-        for key in ["analysis", "reaction", "filtered_count", "filter_info"]:
+        for key in ["analysis", "reaction", "filtered_count", "filter_info", "filter_steps"]:
             st.session_state.pop(key, None)
         st.rerun()
 
@@ -165,19 +171,24 @@ def main():
     if analyze_clicked:
         filtered = events.copy()
         filter_info = []
+        filter_steps = [("All events", len(filtered))]
 
         if currency != "All":
             filtered = filtered[filtered["Currency"] == currency]
             filter_info.append(f"Currency={currency}")
+            filter_steps.append((f"Currency = {currency}", len(filtered)))
         if impact != "All":
             filtered = filtered[filtered["Impact"] == impact]
             filter_info.append(f"Impact={impact}")
+            filter_steps.append((f"Impact = {impact}", len(filtered)))
         if relevance != "All":
             filtered = filtered[filtered["Relevance"] == relevance]
             filter_info.append(f"Relevance={relevance}")
+            filter_steps.append((f"Relevance = {relevance}", len(filtered)))
         if selected_events:
             filtered = filtered[filtered["Event_Normalized"].isin(selected_events)]
             filter_info.append(f"Events={len(selected_events)}")
+            filter_steps.append((f"Selected events ({len(selected_events)})", len(filtered)))
 
         if isinstance(date_range, tuple) and len(date_range) == 2:
             start_date, end_date = date_range
@@ -186,9 +197,11 @@ def main():
                 & (filtered["datetime"].dt.date <= end_date)
             ]
             filter_info.append(f"Date={start_date} → {end_date}")
+            filter_steps.append((f"Date = {start_date} → {end_date}", len(filtered)))
 
         st.session_state["filtered_count"] = len(filtered)
         st.session_state["filter_info"] = " • ".join(filter_info) if filter_info else "No filters — all events"
+        st.session_state["filter_steps"] = filter_steps
 
         with st.spinner("Analyzing XAUUSD reactions..."):
             result = analyze(filtered, gold_times, gold_prices, reaction)
@@ -206,7 +219,10 @@ def main():
             if filtered_count == 0:
                 st.warning("لا توجد أحداث بعد تطبيق الفلاتر.")
                 st.caption(f"الفلاتر الحالية: {filter_info}")
-                st.info("جرّب Reset ثم Analyze. إذا ظهرت النتائج، فالمشكلة كانت في أحد الفلاتر.")
+                st.info("جرّب Clear Event Selection ثم Analyze. جدول التشخيص يوضح عند أي فلتر أصبح العدد صفر.")
+                if "filter_steps" in st.session_state:
+                    st.markdown("#### 🔎 تشخيص الفلاتر")
+                    st.dataframe(pd.DataFrame(st.session_state["filter_steps"], columns=["Filter step", "Events remaining"]), use_container_width=True, hide_index=True)
             else:
                 st.warning(f"تم العثور على {filtered_count:,} حدث، لكن لم يتم العثور على شمعة ذهب مطابقة لفترة التفاعل.")
                 st.caption(f"الفلاتر الحالية: {filter_info}")
