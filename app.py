@@ -68,17 +68,16 @@ def price_at_or_after(times, prices, target_ns):
     return np.nan if idx >= len(prices) else float(prices[idx])
 
 
-def sparkline(event_time, gold_df, reaction_minutes):
+def event_chart(event_time, gold_df, reaction_minutes):
     start = event_time - pd.Timedelta(minutes=30)
     end = event_time + pd.Timedelta(minutes=max(60, reaction_minutes))
-    part = gold_df[(gold_df["datetime"] >= start) & (gold_df["datetime"] <= end)][["datetime", "close"]].copy()
+    part = gold_df[(gold_df["datetime"] >= start) & (gold_df["datetime"] <= end)].copy()
     if part.empty:
         return None
-    if len(part) > 90:
-        idx = np.linspace(0, len(part) - 1, 90).astype(int)
-        part = part.iloc[np.unique(idx)]
-    return part.set_index("datetime")
-
+    fig = go.Figure(data=[go.Candlestick(x=part["datetime"], open=part["open"], high=part["high"], low=part["low"], close=part["close"], name="XAUUSD M1")])
+    fig.add_vline(x=event_time, line_dash="dash", annotation_text="EVENT")
+    fig.update_layout(height=280, margin=dict(l=10,r=10,t=30,b=10), xaxis_rangeslider_visible=False, showlegend=False)
+    return fig
 
 def analyze(filtered_events, gold_times, gold_prices, reaction_minutes):
     rows = []
@@ -272,9 +271,9 @@ def main():
                     f"{item['date']} {item['time']} • {item['impact']}\n"
                     f"**{item['movement']:+.2f} USD {arrow}**"
                 )
-                chart = sparkline(item["datetime"], gold_df, reaction)
+                chart = event_chart(item["datetime"], gold_df, reaction)
                 if chart is not None:
-                    st.line_chart(chart, y="close", height=150, use_container_width=True)
+                    st.plotly_chart(chart, use_container_width=True, config={"displayModeBar": false})
 
     st.subheader("📋 Detailed Results")
     display = result[[
