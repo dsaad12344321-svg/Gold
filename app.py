@@ -84,10 +84,11 @@ def analyze(filtered_events, gold_times, gold_prices, reaction_minutes):
         return pd.DataFrame()
 
     events_work = filtered_events.copy()
-    events_work = events_work.sort_values("datetime").reset_index(drop=True)
+    events_work["datetime"] = pd.to_datetime(events_work["datetime"], errors="coerce").astype("datetime64[ns]")
+    events_work = events_work.dropna(subset=["datetime"]).sort_values("datetime").reset_index(drop=True)
 
     gold_lookup = pd.DataFrame({
-        "gold_datetime": pd.to_datetime(gold_times),
+        "gold_datetime": pd.to_datetime(gold_times).astype("datetime64[ns]"),
         "gold_close": gold_prices,
     }).sort_values("gold_datetime").reset_index(drop=True)
 
