@@ -53,7 +53,10 @@ def load_gold():
     for col in ["open", "high", "low", "close"]:
         df[col] = pd.to_numeric(df[col], errors="coerce")
     df = df.dropna(subset=["datetime", "open", "high", "low", "close"]).sort_values("datetime").reset_index(drop=True)
-    times = df["datetime"].astype("int64").to_numpy()
+    # Force nanosecond precision explicitly. Pandas 2.x may otherwise keep datetime64[us],
+    # and converting that to raw integers would make the timestamps look like 1970.
+    df["datetime"] = df["datetime"].astype("datetime64[ns]")
+    times = df["datetime"].to_numpy(dtype="datetime64[ns]")
     prices = df["close"].to_numpy(dtype="float64")
     return df[["datetime", "open", "high", "low", "close"]], times, prices
 
@@ -88,7 +91,7 @@ def analyze(filtered_events, gold_times, gold_prices, reaction_minutes):
     events_work = events_work.dropna(subset=["datetime"]).sort_values("datetime").reset_index(drop=True)
 
     gold_lookup = pd.DataFrame({
-        "gold_datetime": pd.to_datetime(gold_times).astype("datetime64[ns]"),
+        "gold_datetime": pd.to_datetime(gold_times, errors="coerce").astype("datetime64[ns]"),
         "gold_close": gold_prices,
     }).sort_values("gold_datetime").reset_index(drop=True)
 
@@ -235,7 +238,12 @@ def main():
     if "filtered_count" in st.session_state and st.session_state.get("filtered_count", 0) > 0:
         st.subheader("🕯️ XAUUSD M1 Chart Preview")
         preview_events = events.copy()
-        preview_event = preview_events.iloc[0]
+        # Pick an event that actually has nearby M1 candles instead of the first
+        # calendar event, which may fall on a weekend/market-closed period.
+        event_ns = preview_events["datetime"].astype("datetime64[ns]").astype("int64").to_numpy()
+        gold_ns = gold_df["datetime"].astype("datetime64[ns]").astype("int64").to_numpy()
+        distances = np.abs(event_ns[:, None] - gold_ns[::max(1, len(gold_ns) // 20000)][None, :])
+        preview_event = preview_events.iloc[int(np.argmin(distances).item() // distances.shape[1])]
         preview_chart = event_chart(preview_event["datetime"], gold_df, reaction)
         if preview_chart is not None:
             st.caption(
