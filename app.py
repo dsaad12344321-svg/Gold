@@ -240,10 +240,15 @@ def main():
         preview_events = events.copy()
         # Pick an event that actually has nearby M1 candles instead of the first
         # calendar event, which may fall on a weekend/market-closed period.
-        event_ns = preview_events["datetime"].astype("datetime64[ns]").astype("int64").to_numpy()
-        gold_ns = gold_df["datetime"].astype("datetime64[ns]").astype("int64").to_numpy()
-        distances = np.abs(event_ns[:, None] - gold_ns[::max(1, len(gold_ns) // 20000)][None, :])
-        preview_event = preview_events.iloc[int(np.argmin(distances).item() // distances.shape[1])]
+        gold_min = gold_df["datetime"].min()
+        gold_max = gold_df["datetime"].max()
+        preview_candidates = preview_events[
+            (preview_events["datetime"] >= gold_min) &
+            (preview_events["datetime"] <= gold_max)
+        ].copy()
+        if preview_candidates.empty:
+            preview_candidates = preview_events.copy()
+        preview_event = preview_candidates.iloc[0]
         preview_chart = event_chart(preview_event["datetime"], gold_df, reaction)
         if preview_chart is not None:
             st.caption(
