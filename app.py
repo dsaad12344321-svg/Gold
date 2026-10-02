@@ -80,6 +80,8 @@ def sparkline(event_time, gold_df, reaction_minutes):
 
 def analyze(filtered_events, gold_times, gold_prices, reaction_minutes):
     rows = []
+    before_ok = 0
+    after_ok = 0
     for row in filtered_events.itertuples(index=False):
         event_time = row.datetime
         before = price_at_or_before(gold_times, gold_prices, event_time.value)
@@ -88,6 +90,10 @@ def analyze(filtered_events, gold_times, gold_prices, reaction_minutes):
             gold_prices,
             (event_time + pd.Timedelta(minutes=reaction_minutes)).value,
         )
+        if not np.isnan(before):
+            before_ok += 1
+        if not np.isnan(after):
+            after_ok += 1
         if np.isnan(before) or np.isnan(after):
             continue
         movement = after - before
@@ -108,7 +114,10 @@ def analyze(filtered_events, gold_times, gold_prices, reaction_minutes):
             "points": movement * 100,
             "direction": "UP" if movement > 0 else "DOWN" if movement < 0 else "FLAT",
         })
-    return pd.DataFrame(rows)
+    result = pd.DataFrame(rows)
+    result.attrs["before_ok"] = before_ok
+    result.attrs["after_ok"] = after_ok
+    return result
 
 
 def main():
@@ -226,6 +235,12 @@ def main():
             else:
                 st.warning(f"تم العثور على {filtered_count:,} حدث، لكن لم يتم العثور على شمعة ذهب مطابقة لفترة التفاعل.")
                 st.caption(f"الفلاتر الحالية: {filter_info}")
+                st.markdown("#### 🔎 تشخيص بيانات الوقت")
+                st.write(f"Gold M1 range: **{gold_df["datetime"].min()} → {gold_df["datetime"].max()}**")
+                st.write(f"Events range: **{events["datetime"].min()} → {events["datetime"].max()}**")
+                st.write(f"Reaction: **{reaction} minutes**")
+                sample_times = events["datetime"].dropna().head(5).dt.strftime("%Y-%m-%d %H:%M:%S").tolist()
+                st.write(f"Sample event times: **{sample_times}**")
         else:
             st.markdown("### اختر الفلاتر من الجانب ثم اضغط **Analyze** لعرض النتائج.")
         return
