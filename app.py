@@ -41,7 +41,7 @@ def load_events():
 def load_gold():
     df = pd.read_csv(GOLD_FILE, sep="\t", low_memory=False)
     df.columns = [str(c).strip().strip("<>").lower() for c in df.columns]
-    required = ["date", "time", "close"]
+    required = ["date", "time", "open", "high", "low", "close"]
     missing = [c for c in required if c not in df.columns]
     if missing:
         raise ValueError(f"Missing gold columns: {missing}")
@@ -50,11 +50,12 @@ def load_gold():
         df["date"].astype(str).str.strip() + " " + df["time"].astype(str).str.strip(),
         errors="coerce",
     )
-    df["close"] = pd.to_numeric(df["close"], errors="coerce")
-    df = df.dropna(subset=["datetime", "close"]).sort_values("datetime").reset_index(drop=True)
+    for col in ["open", "high", "low", "close"]:
+        df[col] = pd.to_numeric(df[col], errors="coerce")
+    df = df.dropna(subset=["datetime", "open", "high", "low", "close"]).sort_values("datetime").reset_index(drop=True)
     times = df["datetime"].astype("int64").to_numpy()
     prices = df["close"].to_numpy(dtype="float64")
-    return df[["datetime", "close"]], times, prices
+    return df[["datetime", "open", "high", "low", "close"]], times, prices
 
 
 def price_at_or_before(times, prices, target_ns):
