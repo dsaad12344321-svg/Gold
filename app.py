@@ -71,16 +71,38 @@ def price_at_or_after(times, prices, target_ns):
     return np.nan if idx >= len(prices) else float(prices[idx])
 
 
-def event_chart(event_time, gold_df, reaction_minutes):
+def event_chart(event_time, gold_df, reaction_minutes, previous=None, consensus=None, actual=None):
     start = event_time - pd.Timedelta(minutes=30)
     end = event_time + pd.Timedelta(minutes=reaction_minutes)
     part = gold_df[(gold_df["datetime"] >= start) & (gold_df["datetime"] <= end)].copy()
     if part.empty:
         return None
-    fig = go.Figure(data=[go.Candlestick(x=part["datetime"], open=part["open"], high=part["high"], low=part["low"], close=part["close"], name="XAUUSD M1")])
+
+    def display_value(value):
+        if pd.isna(value):
+            return "N/A"
+        return str(value)
+
+    fig = go.Figure(data=[go.Candlestick(
+        x=part["datetime"], open=part["open"], high=part["high"],
+        low=part["low"], close=part["close"], name="XAUUSD M1"
+    )])
     fig.add_vline(x=event_time, line_dash="dash", annotation_text="EVENT")
-    fig.update_layout(height=280, margin=dict(l=10,r=10,t=30,b=10), xaxis_rangeslider_visible=False, showlegend=False)
+    fig.add_annotation(
+        x=0.01, y=1.12, xref="paper", yref="paper",
+        text=(
+            f"<b>Previous:</b> {display_value(previous)}"
+            f" &nbsp;&nbsp; <b>Forecast:</b> {display_value(consensus)}"
+            f" &nbsp;&nbsp; <b>Actual:</b> {display_value(actual)}"
+        ),
+        showarrow=False, align="left", font=dict(size=11)
+    )
+    fig.update_layout(
+        height=315, margin=dict(l=10,r=10,t=45,b=10),
+        xaxis_rangeslider_visible=False, showlegend=False
+    )
     return fig
+
 
 def analyze(filtered_events, gold_times, gold_prices, reaction_minutes):
     if filtered_events.empty:
@@ -297,7 +319,7 @@ def main():
         if preview_candidates.empty:
             preview_candidates = preview_events.copy()
         preview_event = preview_candidates.iloc[0]
-        preview_chart = event_chart(preview_event["datetime"], gold_df, reaction)
+        preview_chart = event_chart(preview_event["datetime"], gold_df, reaction, preview_event["Previous"], preview_event["Consensus"], preview_event["Actual"])
         if preview_chart is not None:
             st.caption(
                 f"Event: {preview_event['Event_Normalized']} • "
@@ -365,7 +387,7 @@ def main():
                     f"{item['date']} {item['time']} • {item['impact']}\n"
                     f"**{item['movement']:+.2f} USD {arrow}**"
                 )
-                chart = event_chart(item["datetime"], gold_df, reaction)
+                chart = event_chart(item["datetime"], gold_df, reaction, item["previous"], item["consensus"], item["actual"])
                 if chart is not None:
                     st.plotly_chart(chart, use_container_width=True, config={"displayModeBar": False}, key=f"event-chart-{start}-{slot}-{item['datetime'].value}")
 
