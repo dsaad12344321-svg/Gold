@@ -308,7 +308,8 @@ def main():
     chart_rows = result.head(chart_count)
     for start in range(0, len(chart_rows), 3):
         cols = st.columns(3)
-        for col, (_, item) in zip(cols, chart_rows.iloc[start:start + 3].iterrows()):
+        for slot, (_, item) in enumerate(chart_rows.iloc[start:start + 3].iterrows()):
+        col = cols[slot]
             with col:
                 arrow = "↑" if item["movement"] > 0 else "↓" if item["movement"] < 0 else "→"
                 st.markdown(
@@ -318,7 +319,7 @@ def main():
                 )
                 chart = event_chart(item["datetime"], gold_df, reaction)
                 if chart is not None:
-                    st.plotly_chart(chart, use_container_width=True, config={"displayModeBar": False}, key=f"event-chart-{item['datetime']}-{start}")
+                    st.plotly_chart(chart, use_container_width=True, config={"displayModeBar": False}, key=f"event-chart-{start}-{slot}-{item['datetime'].value}")
 
     st.subheader("📋 Detailed Results")
     display = result[[
