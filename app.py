@@ -80,44 +80,53 @@ def event_chart(event_time, gold_df, reaction_minutes):
     return fig
 
 def analyze(filtered_events, gold_times, gold_prices, reaction_minutes):
-    rows = []
-    before_ok = 0
-    after_ok = 0
-    for row in filtered_events.itertuples(index=False):
-        event_time = row.datetime
-        before = price_at_or_before(gold_times, gold_prices, event_time.value)
-        after = price_at_or_after(
-            gold_times,
-            gold_prices,
-            (event_time + pd.Timedelta(minutes=reaction_minutes)).value,
-        )
-        if not np.isnan(before):
-            before_ok += 1
-        if not np.isnan(after):
-            after_ok += 1
-        if np.isnan(before) or np.isnan(after):
-            continue
-        movement = after - before
-        rows.append({
-            "datetime": event_time,
-            "date": event_time.strftime("%Y-%m-%d"),
-            "time": event_time.strftime("%H:%M"),
-            "currency": row.Currency,
-            "event": row.Event_Normalized,
-            "impact": row.Impact,
-            "relevance": row.Relevance,
-            "previous": row.Previous,
-            "consensus": row.Consensus,
-            "actual": row.Actual,
-            "price_before": before,
-            "price_after": after,
-            "movement": movement,
-            "points": movement * 100,
-            "direction": "UP" if movement > 0 else "DOWN" if movement < 0 else "FLAT",
-        })
-    result = pd.DataFrame(rows)
-    result.attrs["before_ok"] = before_ok
-    result.attrs["after_ok"] = after_ok
+    if filtered_events.empty:
+        return pd.DataFrame()
+
+    events_work = filtered_events.copy()
+    events_work = events_work.sort_values("datetime").reset_index(drop=True)
+
+    gold_lookup = pd.DataFrame({
+        "gold_datetime": pd.to_datetime(gold_times),
+        "gold_close": gold_prices,
+    }).sort_values("gold_datetime").reset_index(drop=True)
+
+    before = pd.merge_asof(
+        events_work[["datetime"]],
+        gold_lookup,
+        left_on="datetime",
+        right_on="gold_datetime",
+        direction="backward",
+    )
+
+    targets = events_work[["datetime"]].copy()
+    targets["target_datetime"] = targets["datetime"] + pd.Timedelta(minutes=reaction_minutes)
+
+    after = pd.merge_asof(
+        targets[["target_datetime"]],
+        gold_lookup,
+        left_on="target_datetime",
+        right_on="gold_datetime",
+        direction="forward",
+    )
+
+    result = events_work.copy()
+    result["price_before"] = before["gold_close"].to_numpy()
+    result["price_after"] = after["gold_close"].to_numpy()
+    result = result.dropna(subset=["price_before", "price_after"]).copy()
+
+    result["movement"] = result["price_after"] - result["price_before"]
+    result["points"] = result["movement"] * 100
+    result["direction"] = np.where(
+        result["movement"] > 0, "UP",
+        np.where(result["movement"] < 0, "DOWN", "FLAT")
+    )
+    result["date"] = result["datetime"].dt.strftime("%Y-%m-%d")
+    result["time"] = result["datetime"].dt.strftime("%H:%M")
+    result = result.rename(columns={"Event_Normalized": "event", "Currency": "currency", "Impact": "impact", "Relevance": "relevance",
+                                    "Previous": "previous", "Consensus": "consensus", "Actual": "actual"})
+    result.attrs["before_ok"] = int(before["gold_close"].notna().sum())
+    result.attrs["after_ok"] = int(after["gold_close"].notna().sum())
     return result
 
 
