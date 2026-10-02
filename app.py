@@ -155,19 +155,67 @@ def main():
 
     with st.sidebar:
         st.header("🎛️ Filters")
-        currencies = sorted(events["Currency"].dropna().astype(str).unique().tolist())
-        impacts = sorted(events["Impact"].dropna().astype(str).unique().tolist())
-        relevances = sorted(events["Relevance"].dropna().astype(str).unique().tolist())
-        event_names = sorted(events["Event_Normalized"].dropna().astype(str).unique().tolist())
 
-        currency = st.selectbox("Currency", ["All"] + currencies)
-        impact = st.selectbox("Impact", ["All"] + impacts)
-        relevance = st.selectbox("Relevance", ["All"] + relevances)
-        selected_events = st.multiselect("Event", event_names, default=[], placeholder="All events")
+        # Cascading filters: each filter's options are calculated from the
+        # other currently selected filters, so incompatible choices disappear.
+        def apply_other_filters(df, exclude):
+            out = df
+            if exclude != "currency" and st.session_state.get("filter_currency", "All") != "All":
+                out = out[out["Currency"] == st.session_state["filter_currency"]]
+            if exclude != "impact" and st.session_state.get("filter_impact", "All") != "All":
+                out = out[out["Impact"] == st.session_state["filter_impact"]]
+            if exclude != "relevance" and st.session_state.get("filter_relevance", "All") != "All":
+                out = out[out["Relevance"] == st.session_state["filter_relevance"]]
+            if exclude != "event":
+                chosen = st.session_state.get("filter_events", [])
+                if chosen:
+                    out = out[out["Event_Normalized"].isin(chosen)]
+            return out
+
+        currency_options = ["All"] + sorted(
+            apply_other_filters(events, "currency")["Currency"].dropna().astype(str).unique().tolist()
+        )
+        impact_options = ["All"] + sorted(
+            apply_other_filters(events, "impact")["Impact"].dropna().astype(str).unique().tolist()
+        )
+        relevance_options = ["All"] + sorted(
+            apply_other_filters(events, "relevance")["Relevance"].dropna().astype(str).unique().tolist()
+        )
+        event_options = sorted(
+            apply_other_filters(events, "event")["Event_Normalized"].dropna().astype(str).unique().tolist()
+        )
+
+        # Remove stale selections before rendering widgets.
+        if st.session_state.get("filter_currency", "All") not in currency_options:
+            st.session_state["filter_currency"] = "All"
+        if st.session_state.get("filter_impact", "All") not in impact_options:
+            st.session_state["filter_impact"] = "All"
+        if st.session_state.get("filter_relevance", "All") not in relevance_options:
+            st.session_state["filter_relevance"] = "All"
+        st.session_state["filter_events"] = [
+            x for x in st.session_state.get("filter_events", []) if x in event_options
+        ]
+
+        currency = st.selectbox("Currency", currency_options, key="filter_currency")
+        impact = st.selectbox("Impact", impact_options, key="filter_impact")
+        relevance = st.selectbox("Relevance", relevance_options, key="filter_relevance")
+        selected_events = st.multiselect(
+            "Event",
+            event_options,
+            key="filter_events",
+            placeholder="All events",
+        )
+
         if selected_events and st.button("✕ Clear Event Selection", use_container_width=True):
-            st.session_state["clear_events"] = True
+            st.session_state["filter_events"] = []
             st.rerun()
-        reaction = st.selectbox("Reaction period", [1, 5, 15, 30, 60], index=2, format_func=lambda x: f"{x} minutes")
+
+        reaction = st.selectbox(
+            "Reaction period",
+            [1, 5, 15, 30, 60],
+            index=2,
+            format_func=lambda x: f"{x} minutes",
+        )
         date_range = st.date_input(
             "Date range",
             value=(min_date, max_date),
@@ -183,7 +231,7 @@ def main():
         st.info("تم إلغاء اختيار الحدث. اضغط Analyze لعرض جميع الأحداث المطابقة لباقي الفلاتر.")
 
     if reset_clicked:
-        for key in ["analysis", "reaction", "filtered_count", "filter_info", "filter_steps"]:
+        for key in ["analysis", "reaction", "filtered_count", "filter_info", "filter_steps", "filter_currency", "filter_impact", "filter_relevance", "filter_events"]:
             st.session_state.pop(key, None)
         st.rerun()
 
