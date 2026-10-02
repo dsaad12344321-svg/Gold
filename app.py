@@ -318,7 +318,7 @@ def main():
                 )
                 chart = event_chart(item["datetime"], gold_df, reaction)
                 if chart is not None:
-                    st.plotly_chart(chart, use_container_width=True, config={"displayModeBar": False}, key=f"event-chart-{item[\"datetime\"]}-{start}")
+                    st.plotly_chart(chart, use_container_width=True, config={"displayModeBar": False}, key=f"event-chart-{item['datetime']}-{start}")
 
     st.subheader("📋 Detailed Results")
     display = result[[
