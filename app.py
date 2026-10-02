@@ -73,7 +73,7 @@ def price_at_or_after(times, prices, target_ns):
 
 def event_chart(event_time, gold_df, reaction_minutes):
     start = event_time - pd.Timedelta(minutes=30)
-    end = event_time + pd.Timedelta(minutes=max(60, reaction_minutes))
+    end = event_time + pd.Timedelta(minutes=reaction_minutes)
     part = gold_df[(gold_df["datetime"] >= start) & (gold_df["datetime"] <= end)].copy()
     if part.empty:
         return None
@@ -302,7 +302,7 @@ def main():
             st.caption(
                 f"Event: {preview_event['Event_Normalized']} • "
                 f"{preview_event['datetime'].strftime('%Y-%m-%d %H:%M:%S')} • "
-                f"Window: 30 min before → {max(60, reaction)} min after"
+                f"Window: 30 min before → {reaction} min after"
             )
             st.plotly_chart(
                 preview_chart,
