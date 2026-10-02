@@ -309,7 +309,7 @@ def main():
     for start in range(0, len(chart_rows), 3):
         cols = st.columns(3)
         for slot, (_, item) in enumerate(chart_rows.iloc[start:start + 3].iterrows()):
-        col = cols[slot]
+            col = cols[slot]
             with col:
                 arrow = "↑" if item["movement"] > 0 else "↓" if item["movement"] < 0 else "→"
                 st.markdown(
