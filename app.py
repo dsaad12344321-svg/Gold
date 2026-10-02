@@ -229,6 +229,28 @@ def main():
         st.session_state["analysis"] = result
         st.session_state["reaction"] = reaction
 
+    # Always show a real XAUUSD M1 candlestick preview when events are available.
+    # This preview is independent of the reaction calculation, so a matching-reaction
+    # problem cannot hide the underlying market chart.
+    if "filtered_count" in st.session_state and st.session_state.get("filtered_count", 0) > 0:
+        st.subheader("🕯️ XAUUSD M1 Chart Preview")
+        preview_events = events.copy()
+        preview_event = preview_events.iloc[0]
+        preview_chart = event_chart(preview_event["datetime"], gold_df, reaction)
+        if preview_chart is not None:
+            st.caption(
+                f"Event: {preview_event['Event_Normalized']} • "
+                f"{preview_event['datetime'].strftime('%Y-%m-%d %H:%M:%S')} • "
+                f"Window: 30 min before → {max(60, reaction)} min after"
+            )
+            st.plotly_chart(
+                preview_chart,
+                use_container_width=True,
+                config={"displayModeBar": False, "scrollZoom": True},
+            )
+        else:
+            st.warning("لم يتم العثور على شموع M1 داخل نافذة الشارت لهذا الحدث.")
+
     result = st.session_state.get("analysis", pd.DataFrame())
     reaction = st.session_state.get("reaction", reaction)
 
@@ -283,7 +305,7 @@ def main():
                 )
                 chart = event_chart(item["datetime"], gold_df, reaction)
                 if chart is not None:
-                    st.plotly_chart(chart, use_container_width=True, config={"displayModeBar": false})
+                    st.plotly_chart(chart, use_container_width=True, config={"displayModeBar": False})
 
     st.subheader("📋 Detailed Results")
     display = result[[
