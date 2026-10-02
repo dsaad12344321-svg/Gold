@@ -71,7 +71,75 @@ def price_at_or_after(times, prices, target_ns):
     return np.nan if idx >= len(prices) else float(prices[idx])
 
 
-def event_chart(event_time, gold_df, reaction_minutes, previous=None, consensus=None, actual=None):
+def numeric_value(value):
+    if pd.isna(value):
+        return np.nan
+    text = str(value).strip().replace(",", "")
+    if not text or text.lower() in {"nan", "n/a", "na", "-", "—"}:
+        return np.nan
+    multiplier = 1.0
+    suffix = text[-1:].upper()
+    if suffix == "K":
+        multiplier = 1_000
+        text = text[:-1]
+    elif suffix == "M":
+        multiplier = 1_000_000
+        text = text[:-1]
+    elif suffix == "B":
+        multiplier = 1_000_000_000
+        text = text[:-1]
+    text = text.replace("%", "").strip()
+    try:
+        return float(text) * multiplier
+    except ValueError:
+        return np.nan
+
+
+def gold_direction_hint(event_name, actual, forecast):
+    actual_num = numeric_value(actual)
+    forecast_num = numeric_value(forecast)
+    if np.isnan(actual_num) or np.isnan(forecast_num) or actual_num == forecast_num:
+        return "⚪ لا توجد إشارة واضحة من Actual مقابل Forecast"
+
+    name = str(event_name).lower()
+
+    # For these indicators, a higher-than-expected result generally supports
+    # USD yields/rates and can pressure gold; lower-than-expected can support gold.
+    gold_negative_when_higher = [
+        "cpi", "inflation", "ppi", "core pce", "pce price",
+        "non farm payroll", "nonfarm payroll", "employment change",
+        "adp employment", "average hourly earnings", "wage",
+        "retail sales", "core retail sales", "gdp", "gross domestic",
+        "pmi", "manufacturing", "services", "ism", "industrial production",
+        "consumer confidence", "consumer sentiment", "durable goods",
+        "fed interest rate", "interest rate decision", "fomc",
+        "treasury", "10-year note auction", "job openings"
+    ]
+
+    # For these indicators, a higher-than-expected result generally weakens
+    # the USD/rate outlook and can support gold.
+    gold_positive_when_higher = [
+        "unemployment rate", "jobless claims", "initial claims",
+        "continuing claims", "trade balance", "trade deficit"
+    ]
+
+    is_negative = any(key in name for key in gold_negative_when_higher)
+    is_positive = any(key in name for key in gold_positive_when_higher)
+
+    if not is_negative and not is_positive:
+        return "⚪ اتجاه غير محدد — يعتمد على طبيعة الحدث والسوق"
+
+    actual_higher = actual_num > forecast_num
+    if is_negative:
+        direction = "هبوط ↘" if actual_higher else "صعود ↗"
+    else:
+        direction = "صعود ↗" if actual_higher else "هبوط ↘"
+
+    relation = "أعلى من المتوقع" if actual_higher else "أقل من المتوقع"
+    return f"💡 التوقع النظري للذهب: {direction} — الفعلي {relation}"
+
+
+def event_chart(event_time, gold_df, reaction_minutes, event_name="", previous=None, consensus=None, actual=None):
     start = event_time - pd.Timedelta(minutes=30)
     end = event_time + pd.Timedelta(minutes=reaction_minutes)
     part = gold_df[(gold_df["datetime"] >= start) & (gold_df["datetime"] <= end)].copy()
@@ -94,6 +162,7 @@ def event_chart(event_time, gold_df, reaction_minutes, previous=None, consensus=
             f"<b>Previous:</b> {display_value(previous)}"
             f" &nbsp;&nbsp; <b>Forecast:</b> {display_value(consensus)}"
             f" &nbsp;&nbsp; <b>Actual:</b> {display_value(actual)}"
+            f"<br><span style='font-size:11px'>{gold_direction_hint(event_name, actual, consensus)}</span>"
         ),
         showarrow=False, align="left", font=dict(size=11)
     )
@@ -319,7 +388,7 @@ def main():
         if preview_candidates.empty:
             preview_candidates = preview_events.copy()
         preview_event = preview_candidates.iloc[0]
-        preview_chart = event_chart(preview_event["datetime"], gold_df, reaction, preview_event["Previous"], preview_event["Consensus"], preview_event["Actual"])
+        preview_chart = event_chart(preview_event["datetime"], gold_df, reaction, preview_event["Event_Normalized"], preview_event["Previous"], preview_event["Consensus"], preview_event["Actual"])
         if preview_chart is not None:
             st.caption(
                 f"Event: {preview_event['Event_Normalized']} • "
@@ -387,7 +456,7 @@ def main():
                     f"{item['date']} {item['time']} • {item['impact']}\n"
                     f"**{item['movement']:+.2f} USD {arrow}**"
                 )
-                chart = event_chart(item["datetime"], gold_df, reaction, item["previous"], item["consensus"], item["actual"])
+                chart = event_chart(item["datetime"], gold_df, reaction, item["event"], item["previous"], item["consensus"], item["actual"])
                 if chart is not None:
                     st.plotly_chart(chart, use_container_width=True, config={"displayModeBar": False}, key=f"event-chart-{start}-{slot}-{item['datetime'].value}")
 
