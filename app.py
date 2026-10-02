@@ -245,6 +245,8 @@ def main():
         )
 
         if st.button("↻ Reset", use_container_width=True):
+            st.session_state.pop("analysis", None)
+            st.session_state.pop("reaction", None)
             st.rerun()
 
     st.info(
@@ -327,10 +329,8 @@ def main():
             with col:
                 arrow = "↑" if item["movement"] > 0 else "↓" if item["movement"] < 0 else "→"
                 st.markdown(
-                    f"**{item['event']}**  
-"
-                    f"{item['date']} {item['time']} • {item['impact']}  
-"
+                    f"**{item['event']}**\n"
+                    f"{item['date']} {item['time']} • {item['impact']}\n"
                     f"**{item['movement']:+.2f} USD {arrow}**"
                 )
                 chart = sparkline(
